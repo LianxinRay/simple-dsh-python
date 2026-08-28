@@ -13,7 +13,10 @@ Layers, in dependency order:
 - :mod:`simple_dsh.agent` — the Agent handle and the turn/step loop driver.
 """
 
-from . import agent, cordis, llm, prompts, session, tools
+from . import agent, approval, compaction, cordis, llm, preset, prompts, session, tools
 
-__all__ = ["agent", "cordis", "llm", "prompts", "session", "tools"]
-__version__ = "0.1.0"
+__all__ = [
+    "agent", "approval", "compaction", "cordis", "llm", "preset",
+    "prompts", "session", "tools",
+]
+__version__ = "0.2.0"

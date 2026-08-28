@@ -1,6 +1,6 @@
 # simple-dsh-python
 
-DeepSeek Harness **P0 + P1** 的最小 Python 移植：一个零依赖（仅标准库，Python ≥ 3.11）的插件化 agent harness，复刻 `deepseek-harness` 的核心架构契约。已用真实 DeepSeek API 端到端验证：模型流式输出 → 工具调用（创建并读回文件）→ 会话日志落盘回放。
+DeepSeek Harness **P0 + P1 + P2** 的最小 Python 移植：一个零依赖（仅标准库，Python ≥ 3.11）的插件化 agent harness，复刻 `deepseek-harness` 的核心架构契约。已用真实 DeepSeek API 端到端验证：模型流式输出 → 工具调用（创建并读回文件）→ 会话日志落盘回放。
 
 ## 模块与上游对应
 
@@ -18,6 +18,13 @@ DeepSeek Harness **P0 + P1** 的最小 Python 移植：一个零依赖（仅标�
 | `simple_dsh.tools.shell` | `packages/shell` | `bash` 工具：子进程执行、输出截断、非零退出码 → `is_error` |
 | `simple_dsh.guard` | `packages/guard` | 工具调用超时（`tools/execute` 环绕 waterfall）、连续重复调用拒绝 guard |
 | `simple_dsh.app` | profile/bundle 组合 | `create_app()` 一行组装全部服务与守卫，`create_agent()` 接线会话落盘 |
+| `simple_dsh.approval` | `packages/interaction` | `ctx.approval` 一次性确认；`tools/pre-execute` 上的门控监听器；无 responder 一律拒绝（fail-closed） |
+| `simple_dsh.compaction` | `packages/compaction` | 超 token 预算时摘要旧历史，`compaction/summary` 事件作为派生边界，kept 消息原文保留，日志不重写 |
+| `simple_dsh.tools.todo` | `packages/todo` | `todo_write` 工具；全量快照落日志，重放取最新；不进派生历史 |
+| `simple_dsh.tools.subagent` | `packages/subagent` | `delegate` 工具：子 agent 独立 session、共享上下文，返回最终回答与步数 meta |
+| `simple_dsh.tools.web` | `packages/web` | `web_fetch`：stdlib 抓取 + HTML 正文提取 + 截断 |
+| `simple_dsh.session.sqlite_store` | `packages/session` SQLite 后端 | 事件存 SQLite；单调 `SCHEMA_VERSION`，不匹配即拒绝打开 |
+| `simple_dsh.preset` | `packages/preset` | JSON 组合文档（model/工具开关/审批门控/guard/压缩预算），深合并默认值，缺引用即报错 |
 
 ## 保留的架构不变量
 
@@ -49,10 +56,26 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com   # 可选，此为默认值
 ### 运行
 
 ```bash
-python -m unittest discover -s tests   # 64 个单测
+python -m unittest discover -s tests   # 79 个单测
 python examples/context_demo.py        # Context 机制最小演示（注册表 + waterfall + effect）
 python examples/echo_demo.py           # 端到端 demo（脚本化 adapter，含 JSONL 回放）
 python examples/deepseek_demo.py       # 真实 DeepSeek API demo（无 DEEPSEEK_API_KEY 自动跳过）
+```
+
+### 用 preset 定制组合
+
+```json
+{
+  "model": "deepseek-chat",
+  "tools": {"shell": false, "web": true},
+  "approval": {"tools": ["write_file", "edit_file"]},
+  "compaction": {"max_tokens": 4000}
+}
+```
+
+```python
+ctx = create_app("./workspace", preset="mypreset.json", env_path=".env",
+                 approval_responder=my_responder)
 ```
 
 一行组装（含 DeepSeek adapter、fs/shell 工具、超时与重复调用 guard、会话落盘）：
@@ -94,18 +117,20 @@ asyncio.run(main())
 simple_dsh/
   cordis/       插件运行时（Context / Service / 事件 / effect）
   llm/          对话词汇、assembler、deepseek 适配器
-  session/      事件日志、投影、JSONL 持久化
-  tools/        注册表与管道、fs 工具、shell 工具
+  session/      事件日志、投影、JSONL 与 SQLite 持久化
+  tools/        注册表与管道、fs 工具、shell 工具、todo、subagent、web
   agent/        Agent 句柄与 turn/step 驱动器
   prompts.py    system prompt 装配
   credentials.py  env/.env 凭证
   guard.py      超时与重复调用守卫
+  approval.py   审批交互（fail-closed）
+  compaction.py 上下文压缩
+  preset.py     JSON 组合文档
   app.py        create_app() 组合入口
-tests/          64 个单元测试（stdlib unittest）
+tests/          79 个单元测试（stdlib unittest）
 examples/       context_demo / echo_demo / deepseek_demo
 ```
 
 ## 后续路线（对应上游优先级）
 
-- **P2**：审批交互（`tools/pre-execute` 上的 ask 决策）、compaction 上下文压缩、subagent/skill/web/todo/plan、SQLite 持久化、preset/bundle 的 YAML 组合声明
-- **P3**：terminal（PTY）、LSP、sandbox、jobs/workflow、SDK/ACP 等外围能力
+- **P3**：terminal（PTY）、LSP、sandbox（进程约束）、jobs/workflow、SDK/ACP、Web host/client 等外围能力与交付形态

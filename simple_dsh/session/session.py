@@ -75,9 +75,23 @@ class Session:
         return self._events[seq]
 
     def derive_messages(self) -> list[Message]:
-        """Project model-visible history from the log, in event order."""
+        """Project model-visible history from the log, in event order.
+
+        A ``compaction/summary`` event is a boundary: derived history becomes
+        the summary message, then any verbatim ``kept`` messages carried by
+        the event, then projections of events after it.
+        """
+        start = 0
+        boundary: dict[str, Any] | None = None
+        for index, event in enumerate(self._events):
+            if event.type == "compaction/summary":
+                start = index + 1
+                boundary = event.data
         messages: list[Message] = []
-        for event in self._events:
+        if boundary is not None:
+            messages.append(message_from_json(boundary["message"]))
+            messages.extend(message_from_json(m) for m in boundary.get("kept", []))
+        for event in self._events[start:]:
             projection = self._projections.get(event.type)
             if projection is not None:
                 messages.extend(projection(event.data))
