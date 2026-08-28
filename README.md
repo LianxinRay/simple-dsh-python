@@ -60,6 +60,7 @@ python -m unittest discover -s tests   # 79 个单测
 python examples/context_demo.py        # Context 机制最小演示（注册表 + waterfall + effect）
 python examples/echo_demo.py           # 端到端 demo（脚本化 adapter，含 JSONL 回放）
 python examples/deepseek_demo.py       # 真实 DeepSeek API demo（无 DEEPSEEK_API_KEY 自动跳过）
+python examples/approval_demo.py       # 审批 demo：危险工具调用前 y/N 确认（echo y|n 可自动化）
 ```
 
 ### 用 preset 定制组合
